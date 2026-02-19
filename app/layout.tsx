@@ -18,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     // suppressHydrationWarning is REQUIRED here for next-themes
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="scroll-smooth">
       <body className={inter.className}>
         <Providers>
           {children}

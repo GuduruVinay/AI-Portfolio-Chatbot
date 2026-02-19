@@ -34,13 +34,20 @@ export default function Home() {
             Try asking the chatbot to <span className="font-bold text-slate-900 dark:text-white bg-blue-100 dark:bg-blue-900/30 px-1 rounded">"scroll to projects"</span> or <span className="font-bold text-slate-900 dark:text-white bg-blue-100 dark:bg-blue-900/30 px-1 rounded">"fill out the contact form"</span>.
           </p>
 
+          {/* Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
-            <button className="px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-all hover:scale-105 shadow-lg shadow-slate-900/20">
+            <a 
+              href="#projects" 
+              className="inline-flex items-center justify-center px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-all hover:scale-105 shadow-lg shadow-slate-900/20"
+            >
               View Work
-            </button>
-            <button className="px-8 py-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-full font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+            </a>
+            <a 
+              href="#contact" 
+              className="inline-flex items-center justify-center px-8 py-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-full font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
               Contact Me
-            </button>
+            </a>
           </div>
         </div>
       </section>
