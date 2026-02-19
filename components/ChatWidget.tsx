@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useCoBrowsing } from "@/hooks/useCoBrowsing";
-import { MessageCircle, X, Send, Bot, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, Bot, Sparkles, Mic, RotateCcw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -10,20 +10,76 @@ interface Message {
   content: string;
 }
 
+const INITIAL_MESSAGE: Message = { 
+  role: "assistant", 
+  content: "Hi there! 👋 I'm your AI co-pilot. I can **scroll**, **highlight**, or **fill forms** for you." 
+};
+
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hi there! 👋 I'm your AI co-pilot. I can **scroll**, **highlight**, or **fill forms** for you." }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // 2. Added state for voice recording
+  const [isListening, setIsListening] = useState(false); 
   
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { scrollPage, highlightElement, navigateTo, fillInput } = useCoBrowsing();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // --- NEW: Clear Chat Logic ---
+  const handleClearChat = () => {
+    setMessages([INITIAL_MESSAGE]);
+    setInput("");
+  };
+
+  // --- NEW: Voice Command Logic ---
+  const toggleListening = () => {
+    if (isListening) return; // Prevent multiple instances
+
+    // Check for browser support
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Sorry, your browser doesn't support voice recognition. Try Chrome or Edge.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      // Append the recognized speech to the input field
+      setInput((prev) => prev + (prev ? " " : "") + transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      
+      if (event.error === 'not-allowed') {
+        alert("Microphone access was denied. Please click the mic icon in your browser's address bar to allow access.");
+      } else {
+         alert(`Voice recognition error: ${event.error}`);
+      }
+      
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -73,7 +129,6 @@ export default function ChatWidget() {
   };
 
   return (
-    // Wrapper now uses pointer-events-none when closed so it doesn't block background elements
     <div className={`fixed bottom-6 right-6 z-50 font-sans ${isOpen ? "" : "pointer-events-none"}`}>
       
       {/* CHAT WINDOW */}
@@ -101,9 +156,23 @@ export default function ChatWidget() {
                 </p>
             </div>
           </div>
-          <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          
+          {/* Header Buttons (Clear & Close) */}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleClearChat} 
+              className="text-white/70 hover:text-white transition-colors"
+              title="Clear Chat"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setIsOpen(false)} 
+              className="text-white/70 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -149,16 +218,34 @@ export default function ChatWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Ask me to scroll or highlight..."
-              className="w-full pl-4 pr-12 py-3 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              placeholder={isListening ? "Listening..." : "Ask me to scroll or highlight..."}
+              // Increased pr-20 to make room for both buttons
+              className="w-full pl-4 pr-20 py-3 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
-            <button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
-              className="absolute right-2 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+            
+            <div className="absolute right-2 flex items-center gap-1">
+              {/* Mic Button */}
+              <button
+                onClick={toggleListening}
+                title="Use Voice"
+                className={`p-2 rounded-lg transition-all ${
+                  isListening 
+                    ? "bg-red-500 text-white animate-pulse" 
+                    : "text-slate-400 hover:text-blue-600 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+              
+              {/* Send Button */}
+              <button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div className="text-[10px] text-center text-slate-400 mt-2 flex justify-center items-center gap-1">
             <Sparkles className="w-3 h-3" /> Powered by Gemini API
