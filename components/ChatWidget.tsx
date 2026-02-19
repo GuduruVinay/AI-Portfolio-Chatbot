@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useCoBrowsing } from "@/hooks/useCoBrowsing";
 import { MessageCircle, X, Send, Bot, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -32,16 +33,13 @@ export default function ChatWidget() {
     setIsLoading(true);
 
     try {
-      // 1. Grab context
       const pageContext = document.body.innerText.substring(0, 4000);
       
-      // 2. Format history for Gemini (strip system logs and start with user)
       const apiHistory = messages.slice(1).filter(m => m.role !== "system").map(m => ({ 
             role: m.role === 'user' ? 'user' : 'model', 
             parts: [{ text: m.content }] 
       }));
 
-      // 3. Call API
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -50,7 +48,6 @@ export default function ChatWidget() {
 
       const data = await response.json();
 
-      // 4. Handle tool call vs normal response
       if (data.type === "action") {
         let actionResult = "Action executed.";
         switch (data.tool) {
@@ -76,12 +73,15 @@ export default function ChatWidget() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
+    // Wrapper now uses pointer-events-none when closed so it doesn't block background elements
+    <div className={`fixed bottom-6 right-6 z-50 font-sans ${isOpen ? "" : "pointer-events-none"}`}>
+      
       {/* CHAT WINDOW */}
       <div className={`
+        absolute bottom-20 right-0
         transition-all duration-300 ease-in-out transform origin-bottom-right
-        ${isOpen ? "scale-100 opacity-100 translate-y-0" : "scale-90 opacity-0 translate-y-10 pointer-events-none"}
-        mb-4 w-87.5 md:w-100 h-137.5
+        ${isOpen ? "scale-100 opacity-100 translate-y-0 pointer-events-auto" : "scale-90 opacity-0 translate-y-10 pointer-events-none"}
+        w-87.5 md:w-100 h-137.5
         bg-white dark:bg-slate-900 
         rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 
         overflow-hidden flex flex-col
@@ -124,7 +124,7 @@ export default function ChatWidget() {
                   ? "bg-transparent text-slate-400 dark:text-slate-500 text-xs italic w-full text-center py-1 shadow-none"
                   : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm"
                 }`}>
-                {msg.content}
+                <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
             </div>
           ))}
@@ -169,7 +169,7 @@ export default function ChatWidget() {
       {/* TOGGLE BUTTON */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'} transition-all duration-300 p-4 bg-linear-to-tr from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-blue-500/30 hover:scale-110 active:scale-95 flex items-center justify-center`}
+        className={`pointer-events-auto ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'} transition-all duration-300 p-4 bg-linear-to-tr from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-blue-500/30 hover:scale-110 active:scale-95 flex items-center justify-center`}
       >
         <MessageCircle className="w-7 h-7" />
       </button>
