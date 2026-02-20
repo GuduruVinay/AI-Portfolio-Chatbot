@@ -2,12 +2,16 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useCoBrowsing } from "@/hooks/useCoBrowsing";
-import { MessageCircle, X, Send, Bot, Sparkles, Mic, RotateCcw } from "lucide-react";
+// Import the Check icon for the approve button
+import { MessageCircle, X, Send, Bot, Sparkles, Mic, RotateCcw, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
+// 1. Update the Message Interface to handle pending actions
 interface Message {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "interactive";
   content: string;
+  pendingAction?: any; // Stores the tool call payload
+  resolved?: boolean;  // Tracks if the user clicked approve/deny
 }
 
 const INITIAL_MESSAGE: Message = { 
@@ -20,7 +24,6 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  // 2. Added state for voice recording
   const [isListening, setIsListening] = useState(false); 
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,20 +33,16 @@ export default function ChatWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // --- NEW: Clear Chat Logic ---
   const handleClearChat = () => {
     setMessages([INITIAL_MESSAGE]);
     setInput("");
   };
 
-  // --- NEW: Voice Command Logic ---
   const toggleListening = () => {
-    if (isListening) return; // Prevent multiple instances
-
-    // Check for browser support
+    if (isListening) return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Sorry, your browser doesn't support voice recognition. Try Chrome or Edge.");
+      alert("Sorry, your browser doesn't support voice recognition.");
       return;
     }
 
@@ -52,33 +51,48 @@ export default function ChatWidget() {
     recognition.interimResults = false;
     recognition.lang = 'en-US';
 
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
-
+    recognition.onstart = () => setIsListening(true);
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      // Append the recognized speech to the input field
       setInput((prev) => prev + (prev ? " " : "") + transcript);
     };
-
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      
       if (event.error === 'not-allowed') {
-        alert("Microphone access was denied. Please click the mic icon in your browser's address bar to allow access.");
-      } else {
-         alert(`Voice recognition error: ${event.error}`);
+        alert("Microphone access was denied. Please allow it in your browser settings.");
       }
-      
       setIsListening(false);
     };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
+    recognition.onend = () => setIsListening(false);
     recognition.start();
+  };
+
+  // --- NEW: Handle User Decision for Actions ---
+  const handleResolveAction = (index: number, approved: boolean) => {
+    const msg = messages[index];
+    if (!msg.pendingAction) return;
+
+    // 1. Mark the UI buttons as resolved
+    setMessages(prev => prev.map((m, i) => i === index ? { ...m, resolved: true } : m));
+
+    // 2. Execute the action if approved
+    if (approved) {
+        const { tool, args } = msg.pendingAction;
+        let actionResult = "";
+        
+        if (tool === "fill_form") {
+            actionResult = fillInput(args.field, args.value);
+        }
+
+        setMessages(prev => [
+            ...prev,
+            { role: "system", content: `✅ Approved: ${actionResult}` }
+        ]);
+    } else {
+        setMessages(prev => [
+            ...prev,
+            { role: "system", content: `❌ Action denied by user.` }
+        ]);
+    }
   };
 
   const handleSend = async () => {
@@ -91,7 +105,10 @@ export default function ChatWidget() {
     try {
       const pageContext = document.body.innerText.substring(0, 4000);
       
-      const apiHistory = messages.slice(1).filter(m => m.role !== "system").map(m => ({ 
+      const apiHistory = messages
+        .slice(1)
+        .filter(m => m.role !== "system" && m.role !== "interactive") // Don't send UI states to AI
+        .map(m => ({ 
             role: m.role === 'user' ? 'user' : 'model', 
             parts: [{ text: m.content }] 
       }));
@@ -105,18 +122,35 @@ export default function ChatWidget() {
       const data = await response.json();
 
       if (data.type === "action") {
-        let actionResult = "Action executed.";
-        switch (data.tool) {
-            case "scroll": actionResult = scrollPage(data.args.direction); break;
-            case "highlight": actionResult = highlightElement(data.args.text || data.args.keyword); break;
-            case "navigate": actionResult = navigateTo(data.args.path); break;
-            case "fill_form": actionResult = fillInput(data.args.field, data.args.value); break;
+        
+        // INTERCEPT SENSITIVE ACTIONS (Form filling)
+        if (data.tool === "fill_form") {
+            setMessages((prev) => [
+                ...prev, 
+                { role: "assistant", content: data.message || "I can help with that." },
+                { 
+                    role: "interactive", 
+                    content: `Allow AI to input "${data.args.value}" into the ${data.args.field} field?`,
+                    pendingAction: data,
+                    resolved: false
+                }
+            ]);
+        } 
+        // EXECUTE SAFE ACTIONS IMMEDIATELY (Scroll, Highlight, Navigate)
+        else {
+            let actionResult = "Action executed.";
+            switch (data.tool) {
+                case "scroll": actionResult = scrollPage(data.args.direction); break;
+                case "highlight": actionResult = highlightElement(data.args.text || data.args.keyword); break;
+                case "navigate": actionResult = navigateTo(data.args.path); break;
+            }
+            setMessages((prev) => [
+                ...prev, 
+                { role: "system", content: `⚙️ ${actionResult}` }, 
+                { role: "assistant", content: data.message || "Done!" }
+            ]);
         }
-        setMessages((prev) => [
-            ...prev, 
-            { role: "system", content: `⚙️ ${actionResult}` }, 
-            { role: "assistant", content: data.message || "Done!" }
-        ]);
+
       } else {
         setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
       }
@@ -131,7 +165,6 @@ export default function ChatWidget() {
   return (
     <div className={`fixed bottom-6 right-6 z-50 font-sans ${isOpen ? "" : "pointer-events-none"}`}>
       
-      {/* CHAT WINDOW */}
       <div className={`
         absolute bottom-20 right-0
         transition-all duration-300 ease-in-out transform origin-bottom-right
@@ -142,7 +175,6 @@ export default function ChatWidget() {
         overflow-hidden flex flex-col
       `}>
         
-        {/* Header */}
         <div className="bg-linear-to-r from-blue-600 to-indigo-600 p-4 flex justify-between items-center shadow-md">
           <div className="flex items-center gap-3 text-white">
             <div className="p-2 bg-white/20 rounded-full backdrop-blur-sm">
@@ -157,46 +189,75 @@ export default function ChatWidget() {
             </div>
           </div>
           
-          {/* Header Buttons (Clear & Close) */}
           <div className="flex items-center gap-3">
-            <button 
-              onClick={handleClearChat} 
-              className="text-white/70 hover:text-white transition-colors"
-              title="Clear Chat"
-            >
+            <button onClick={handleClearChat} className="text-white/70 hover:text-white transition-colors" title="Clear Chat">
               <RotateCcw className="w-4 h-4" />
             </button>
-            <button 
-              onClick={() => setIsOpen(false)} 
-              className="text-white/70 hover:text-white transition-colors"
-            >
+            <button onClick={() => setIsOpen(false)} className="text-white/70 hover:text-white transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-slate-950/50 scrollbar-thin">
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              
-              {msg.role !== "user" && msg.role !== "system" && (
-                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center mr-2 mt-1 shrink-0">
-                    <Bot className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                </div>
-              )}
+          {messages.map((msg, idx) => {
+            
+            // --- NEW: Render Interactive Permission Bubbles ---
+            if (msg.role === "interactive") {
+                return (
+                    <div key={idx} className="w-full bg-white dark:bg-slate-800 rounded-xl p-4 text-sm border border-slate-200 dark:border-slate-700 shadow-sm animate-in slide-in-from-bottom-2">
+                        <div className="flex items-center gap-2 mb-3 text-slate-700 dark:text-slate-200 font-medium">
+                            <span className="flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                            Permission Required
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-400 mb-4">{msg.content}</p>
+                        
+                        {!msg.resolved ? (
+                            <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handleResolveAction(idx, true)} 
+                                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors flex justify-center items-center gap-2 font-medium"
+                                >
+                                  <Check className="w-4 h-4"/> Approve
+                                </button>
+                                <button 
+                                  onClick={() => handleResolveAction(idx, false)} 
+                                  className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 font-medium"
+                                >
+                                  <X className="w-4 h-4"/> Deny
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-xs text-slate-400 italic text-center">Request closed.</div>
+                        )}
+                    </div>
+                );
+            }
 
-              <div className={`max-w-[80%] px-4 py-3 shadow-sm text-sm leading-relaxed
-                ${msg.role === "user" 
-                  ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" 
-                  : msg.role === "system"
-                  ? "bg-transparent text-slate-400 dark:text-slate-500 text-xs italic w-full text-center py-1 shadow-none"
-                  : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm"
-                }`}>
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
-              </div>
-            </div>
-          ))}
+            // --- Standard Messages ---
+            return (
+                <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role !== "user" && msg.role !== "system" && (
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center mr-2 mt-1 shrink-0">
+                        <Bot className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                  )}
+
+                  <div className={`max-w-[80%] px-4 py-3 shadow-sm text-sm leading-relaxed
+                    ${msg.role === "user" 
+                      ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" 
+                      : msg.role === "system"
+                      ? "bg-transparent text-slate-400 dark:text-slate-500 text-xs italic w-full text-center py-1 shadow-none"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm"
+                    }`}>
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                </div>
+            );
+          })}
           
           {isLoading && (
              <div className="flex justify-start ml-10">
@@ -210,7 +271,6 @@ export default function ChatWidget() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
           <div className="relative flex items-center">
             <input
@@ -219,12 +279,10 @@ export default function ChatWidget() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               placeholder={isListening ? "Listening..." : "Ask me to scroll or highlight..."}
-              // Increased pr-20 to make room for both buttons
               className="w-full pl-4 pr-20 py-3 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
             
             <div className="absolute right-2 flex items-center gap-1">
-              {/* Mic Button */}
               <button
                 onClick={toggleListening}
                 title="Use Voice"
@@ -237,7 +295,6 @@ export default function ChatWidget() {
                 <Mic className="w-4 h-4" />
               </button>
               
-              {/* Send Button */}
               <button
                 onClick={handleSend}
                 disabled={isLoading || !input.trim()}
@@ -253,7 +310,6 @@ export default function ChatWidget() {
         </div>
       </div>
 
-      {/* TOGGLE BUTTON */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`pointer-events-auto ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'} transition-all duration-300 p-4 bg-linear-to-tr from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-blue-500/30 hover:scale-110 active:scale-95 flex items-center justify-center`}
