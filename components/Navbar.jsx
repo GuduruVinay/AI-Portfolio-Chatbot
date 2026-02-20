@@ -8,7 +8,8 @@ export default function Navbar() {
         
         {/* Logo */}
         <Link href="/" className="font-extrabold text-xl text-slate-900 dark:text-white tracking-tight">
-          AI<span className="text-blue-600 dark:text-blue-400">Agent</span>
+          {/* AI<span className="text-blue-600 dark:text-blue-400">Agent</span> */}
+          My <span className="text-blue-600 dark:text-blue-400">Portfolio</span>
         </Link>
         
         {/* Links & Controls Area */}
