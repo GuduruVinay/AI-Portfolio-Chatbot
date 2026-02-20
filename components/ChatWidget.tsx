@@ -107,7 +107,7 @@ export default function ChatWidget() {
       
       const apiHistory = messages
         .slice(1)
-        .filter(m => m.role !== "system" && m.role !== "interactive") // Don't send UI states to AI
+        .filter(m => m.role !== "system" && m.role !== "interactive")
         .map(m => ({ 
             role: m.role === 'user' ? 'user' : 'model', 
             parts: [{ text: m.content }] 
@@ -121,9 +121,12 @@ export default function ChatWidget() {
 
       const data = await response.json();
 
+      // --- NEW: Catch API errors gracefully ---
+      if (!response.ok || data.error) {
+          throw new Error(data.error || `Server error: ${response.status}`);
+      }
+
       if (data.type === "action") {
-        
-        // INTERCEPT SENSITIVE ACTIONS (Form filling)
         if (data.tool === "fill_form") {
             setMessages((prev) => [
                 ...prev, 
@@ -135,9 +138,7 @@ export default function ChatWidget() {
                     resolved: false
                 }
             ]);
-        } 
-        // EXECUTE SAFE ACTIONS IMMEDIATELY (Scroll, Highlight, Navigate)
-        else {
+        } else {
             let actionResult = "Action executed.";
             switch (data.tool) {
                 case "scroll": actionResult = scrollPage(data.args.direction); break;
@@ -147,16 +148,20 @@ export default function ChatWidget() {
             setMessages((prev) => [
                 ...prev, 
                 { role: "system", content: `⚙️ ${actionResult}` }, 
-                { role: "assistant", content: data.message || "Done!" }
+                // Fallback text added just in case data.message is missing
+                { role: "assistant", content: data.message || "I've completed that action for you." } 
             ]);
         }
-
       } else {
-        setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
+        // Fallback text added here too
+        setMessages((prev) => [...prev, { role: "assistant", content: data.message || "I didn't quite catch that. Could you try again?" }]);
       }
-    } catch (error) {
-      console.error(error);
-      setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I encountered an error connecting to the AI." }]);
+    } catch (error: any) {
+      console.error("Chat API Error:", error);
+      setMessages((prev) => [...prev, { 
+          role: "assistant", 
+          content: `⚠️ **Error:** ${error.message || "I couldn't connect to the AI."}` 
+      }]);
     } finally {
       setIsLoading(false);
     }
