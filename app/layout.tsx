@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ChatWidget from "@/components/ChatWidget";
-import { Providers } from "./providers"; // Import the provider
+import Navbar from "@/components/Navbar"; // <-- Import Navbar
+import { Providers } from "./providers"; 
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,11 +18,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // suppressHydrationWarning is REQUIRED here for next-themes
     <html lang="en" suppressHydrationWarning className="scroll-smooth">
       <body className={inter.className}>
         <Providers>
-          {children}
+          <Navbar /> {/* <-- Add Navbar here above children */}
+          <div className="pt-16"> {/* Add padding so nav doesn't overlap content */}
+            {children}
+          </div>
           <ChatWidget />
         </Providers>
       </body>

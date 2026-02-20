@@ -1,15 +1,11 @@
 "use client";
 
 import ProjectCard from "@/components/ProjectCard";
-import ThemeToggle from "@/components/ThemeToggle";
 import { Github, Linkedin, Mail, Code2, Terminal, Cpu, Database } from "lucide-react";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-sans selection:bg-blue-200 dark:selection:bg-blue-900">
-      
-      {/* Dark Mode Toggle is placed top right */}
-      <ThemeToggle />
 
       {/* --- HERO SECTION --- */}
       <section id="hero" className="relative pt-32 pb-24 px-6 overflow-hidden">
