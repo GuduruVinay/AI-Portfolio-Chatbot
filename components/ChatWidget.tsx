@@ -2,16 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useCoBrowsing } from "@/hooks/useCoBrowsing";
-// Import the Check icon for the approve button
 import { MessageCircle, X, Send, Bot, Sparkles, Mic, RotateCcw, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
-// 1. Update the Message Interface to handle pending actions
 interface Message {
   role: "user" | "assistant" | "system" | "interactive";
   content: string;
-  pendingAction?: any; // Stores the tool call payload
-  resolved?: boolean;  // Tracks if the user clicked approve/deny
+  pendingAction?: any;
+  resolved?: boolean;
 }
 
 const INITIAL_MESSAGE: Message = { 
@@ -59,6 +57,8 @@ export default function ChatWidget() {
     recognition.onerror = (event: any) => {
       if (event.error === 'not-allowed') {
         alert("Microphone access was denied. Please allow it in your browser settings.");
+      } else {
+        console.error("Speech recognition error", event.error);
       }
       setIsListening(false);
     };
@@ -66,15 +66,12 @@ export default function ChatWidget() {
     recognition.start();
   };
 
-  // --- NEW: Handle User Decision for Actions ---
   const handleResolveAction = (index: number, approved: boolean) => {
     const msg = messages[index];
     if (!msg.pendingAction) return;
 
-    // 1. Mark the UI buttons as resolved
     setMessages(prev => prev.map((m, i) => i === index ? { ...m, resolved: true } : m));
 
-    // 2. Execute the action if approved
     if (approved) {
         const { tool, args } = msg.pendingAction;
         let actionResult = "";
@@ -107,7 +104,7 @@ export default function ChatWidget() {
       
       const apiHistory = messages
         .slice(1)
-        .filter(m => m.role !== "system" && m.role !== "interactive")
+        .filter(m => m.role !== "system" && m.role !== "interactive") 
         .map(m => ({ 
             role: m.role === 'user' ? 'user' : 'model', 
             parts: [{ text: m.content }] 
@@ -121,9 +118,9 @@ export default function ChatWidget() {
 
       const data = await response.json();
 
-      // --- NEW: Catch API errors gracefully ---
+      // Catch backend errors so we don't render empty bubbles
       if (!response.ok || data.error) {
-          throw new Error(data.error || `Server error: ${response.status}`);
+        throw new Error(data.error || `Server error: ${response.status}`);
       }
 
       if (data.type === "action") {
@@ -133,7 +130,7 @@ export default function ChatWidget() {
                 { role: "assistant", content: data.message || "I can help with that." },
                 { 
                     role: "interactive", 
-                    content: `Allow AI to input "${data.args.value}" into the ${data.args.field} field?`,
+                    content: `Allow AI to input "${data.args.value}" into the "${data.args.field}" field?`,
                     pendingAction: data,
                     resolved: false
                 }
@@ -141,27 +138,29 @@ export default function ChatWidget() {
         } else {
             let actionResult = "Action executed.";
             switch (data.tool) {
-                case "scroll": actionResult = scrollPage(data.args.direction); break;
-                case "highlight": actionResult = highlightElement(data.args.text || data.args.keyword); break;
-                case "navigate": actionResult = navigateTo(data.args.path); break;
+                case "scroll": 
+                    // Safely handles either 'target' or 'direction' depending on LLM output
+                    actionResult = scrollPage(data.args.target || data.args.direction); 
+                    break;
+                case "highlight": 
+                    actionResult = highlightElement(data.args.text || data.args.keyword); 
+                    break;
+                case "navigate": 
+                    actionResult = navigateTo(data.args.path); 
+                    break;
             }
             setMessages((prev) => [
                 ...prev, 
                 { role: "system", content: `⚙️ ${actionResult}` }, 
-                // Fallback text added just in case data.message is missing
-                { role: "assistant", content: data.message || "I've completed that action for you." } 
+                { role: "assistant", content: data.message || "Done!" }
             ]);
         }
       } else {
-        // Fallback text added here too
-        setMessages((prev) => [...prev, { role: "assistant", content: data.message || "I didn't quite catch that. Could you try again?" }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
       }
     } catch (error: any) {
-      console.error("Chat API Error:", error);
-      setMessages((prev) => [...prev, { 
-          role: "assistant", 
-          content: `⚠️ **Error:** ${error.message || "I couldn't connect to the AI."}` 
-      }]);
+      console.error(error);
+      setMessages((prev) => [...prev, { role: "system", content: `⚠️ Error: ${error.message || "Failed to connect to AI."}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -180,6 +179,7 @@ export default function ChatWidget() {
         overflow-hidden flex flex-col
       `}>
         
+        {/* Header */}
         <div className="bg-linear-to-r from-blue-600 to-indigo-600 p-4 flex justify-between items-center shadow-md">
           <div className="flex items-center gap-3 text-white">
             <div className="p-2 bg-white/20 rounded-full backdrop-blur-sm">
@@ -198,16 +198,17 @@ export default function ChatWidget() {
             <button onClick={handleClearChat} className="text-white/70 hover:text-white transition-colors" title="Clear Chat">
               <RotateCcw className="w-4 h-4" />
             </button>
-            <button onClick={() => setIsOpen(false)} className="text-white/70 hover:text-white transition-colors">
+            <button onClick={() => setIsOpen(false)} className="text-white/70 hover:text-white transition-colors" title="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-slate-950/50 scrollbar-thin">
           {messages.map((msg, idx) => {
             
-            // --- NEW: Render Interactive Permission Bubbles ---
+            // Interactive Permission Card
             if (msg.role === "interactive") {
                 return (
                     <div key={idx} className="w-full bg-white dark:bg-slate-800 rounded-xl p-4 text-sm border border-slate-200 dark:border-slate-700 shadow-sm animate-in slide-in-from-bottom-2">
@@ -242,7 +243,7 @@ export default function ChatWidget() {
                 );
             }
 
-            // --- Standard Messages ---
+            // Standard Chat Bubbles
             return (
                 <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   {msg.role !== "user" && msg.role !== "system" && (
@@ -258,6 +259,7 @@ export default function ChatWidget() {
                       ? "bg-transparent text-slate-400 dark:text-slate-500 text-xs italic w-full text-center py-1 shadow-none"
                       : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm"
                     }`}>
+                    {/* Using ReactMarkdown for formatting */}
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                   </div>
                 </div>
@@ -276,6 +278,7 @@ export default function ChatWidget() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Input Area */}
         <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
           <div className="relative flex items-center">
             <input
@@ -315,6 +318,7 @@ export default function ChatWidget() {
         </div>
       </div>
 
+      {/* Main Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`pointer-events-auto ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'} transition-all duration-300 p-4 bg-linear-to-tr from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-blue-500/30 hover:scale-110 active:scale-95 flex items-center justify-center`}
