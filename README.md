@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Portfolio Chatbot
+
+A modern, interactive developer portfolio that goes beyond clicking and scrolling. This project features a built-in AI Co-Pilot (powered by Gemini 2.5 Flash) that can actively read the page context, navigate routes, highlight elements, and even fill out contact forms for the user using voice or text commands.
+
+## Key Features
+
+- **Agentic Co-Browsing:** The AI doesn't just chat; it interacts with the DOM. You can ask it to "scroll to my Godot games," "highlight my web development skills," or "fill out the email form."
+- **Voice Commands:** Integrated Web Speech API allows users to hold a microphone button and speak directly to the AI.
+- **Context-Aware:** The AI scrapes the visible viewport and page structure, allowing it to answer specific questions about featured projects like the digital catalogue, YouTube clone, or game jam entries like _Unface_.
+- **Interactive Permissions:** Security first. Before the AI executes sensitive DOM actions (like filling out input fields), it renders a UI card asking the user to Approve or Deny the action.
+- **Modern UI/UX:** Built with Tailwind CSS v4, featuring glassmorphism, smooth scrolling, and an integrated Dark/Light mode toggle.
+- **Markdown Chat:** The chat widget fully supports markdown rendering for rich text responses.
+
+## Tech Stack
+
+- **Framework:** Next.js 14/15 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS v4 & Lucide React Icons
+- **AI Integration:** Google Gemini API (`gemini-2.5-flash`)
+- **Theming:** `next-themes`
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+Make sure you have Node.js installed (v18+ recommended) and a free API key from [Google AI Studio](https://aistudio.google.com/).
+
+### Installation
+
+## Clone the repository
+
+```bash
+git clone https://github.com/GuduruVinay/AI-Portfolio-Chatbot.git
+cd AI-Portfolio-Chatbot
+```
+
+## Install Dependencies
+
+```bash
+npm install
+```
+
+## Run the project
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## GitHub Link
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+https://github.com/GuduruVinay/AI-Portfolio-Chatbot
