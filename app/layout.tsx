@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ChatWidget from "@/components/ChatWidget";
-import Navbar from "@/components/Navbar"; // <-- Import Navbar
+import Navbar from "@/components/Navbar";
 import { Providers } from "./providers"; 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -21,11 +21,14 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className="scroll-smooth">
       <body className={inter.className}>
         <Providers>
-          <Navbar /> {/* <-- Add Navbar here above children */}
-          <div className="pt-16"> {/* Add padding so nav doesn't overlap content */}
+          <Navbar /> 
+          <div className="pt-16">
             {children}
           </div>
+          
+          {/* CRITICAL: Place the widget here, outside of all other layout constraints */}
           <ChatWidget />
+          
         </Providers>
       </body>
     </html>

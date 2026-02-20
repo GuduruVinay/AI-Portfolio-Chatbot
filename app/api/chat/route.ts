@@ -3,16 +3,20 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const { message, pageContext, history } = await req.json();
+    // 1. Extract customApiKey from the request body
+    const { message, pageContext, history, customApiKey } = await req.json();
 
-    // Ensure API key exists
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: "Missing GEMINI_API_KEY in environment variables." }, { status: 500 });
+    // 2. Decide which key to use (User's key > Your .env key)
+    const apiKeyToUse = customApiKey || process.env.GEMINI_API_KEY;
+
+    if (!apiKeyToUse) {
+      return NextResponse.json({ 
+        error: "Missing API Key. Please click the key icon in the chat to add yours." 
+      }, { status: 400 });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const genAI = new GoogleGenerativeAI(apiKeyToUse);
     
-    // We use gemini-2.5-flash as it is the fastest for real-time UI agents
     const model = genAI.getGenerativeModel({ 
         model: "gemini-2.5-flash",
         systemInstruction: `You are an AI co-browsing assistant for a developer's portfolio website. 
@@ -45,19 +49,21 @@ ${pageContext.substring(0, 3000)}`
     const text = result.response.text();
 
     try {
-        // AI models often wrap JSON in markdown (```json ... ```). We strip it out to parse it cleanly.
         const cleanedText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-        
-        // If this parses successfully, it means the AI returned an Action Tool
         const json = JSON.parse(cleanedText);
         return NextResponse.json(json);
     } catch (e) {
-        // If JSON parsing fails, it means the AI just responded with standard text
         return NextResponse.json({ type: "text", message: text });
     }
 
   } catch (error: any) {
     console.error("API Error:", error);
+    
+    // Check if the error is specifically because of an invalid API key
+    if (error.message?.includes("API key not valid")) {
+        return NextResponse.json({ error: "The API key provided is invalid." }, { status: 401 });
+    }
+    
     return NextResponse.json({ error: error.message || "Failed to connect to Gemini." }, { status: 500 });
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useCoBrowsing } from "@/hooks/useCoBrowsing";
-import { MessageCircle, X, Send, Bot, Sparkles, Mic, RotateCcw, Check } from "lucide-react";
+import { MessageCircle, X, Send, Bot, Sparkles, Mic, RotateCcw, Check, Key } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -24,12 +24,39 @@ export default function ChatWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false); 
   
+  const [customApiKey, setCustomApiKey] = useState("");
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState("");
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { scrollPage, highlightElement, navigateTo, fillInput } = useCoBrowsing();
 
   useEffect(() => {
+    const storedKey = localStorage.getItem("gemini_api_key");
+    if (storedKey) {
+      setCustomApiKey(storedKey);
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const openApiKeyModal = () => {
+    setTempApiKey(customApiKey || "");
+    setIsApiKeyModalOpen(true);
+  };
+
+  const saveApiKey = () => {
+    const trimmedKey = tempApiKey.trim();
+    setCustomApiKey(trimmedKey);
+    
+    if (trimmedKey) {
+      localStorage.setItem("gemini_api_key", trimmedKey);
+      setMessages(prev => [...prev, { role: "system", content: "🔑 Custom API Key saved locally." }]);
+    } else {
+      localStorage.removeItem("gemini_api_key");
+      setMessages(prev => [...prev, { role: "system", content: "🔓 Removed custom API Key. Using default." }]);
+    }
+    setIsApiKeyModalOpen(false);
+  };
 
   const handleClearChat = () => {
     setMessages([INITIAL_MESSAGE]);
@@ -113,12 +140,11 @@ export default function ChatWidget() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, pageContext, history: apiHistory }),
+        body: JSON.stringify({ message: userMessage, pageContext, history: apiHistory, customApiKey }),
       });
 
       const data = await response.json();
 
-      // Catch backend errors so we don't render empty bubbles
       if (!response.ok || data.error) {
         throw new Error(data.error || `Server error: ${response.status}`);
       }
@@ -139,7 +165,6 @@ export default function ChatWidget() {
             let actionResult = "Action executed.";
             switch (data.tool) {
                 case "scroll": 
-                    // Safely handles either 'target' or 'direction' depending on LLM output
                     actionResult = scrollPage(data.args.target || data.args.direction); 
                     break;
                 case "highlight": 
@@ -167,19 +192,58 @@ export default function ChatWidget() {
   };
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 font-sans ${isOpen ? "" : "pointer-events-none"}`}>
+    <div className="fixed bottom-6 right-6 z-100 font-sans">
       
       <div className={`
         absolute bottom-20 right-0
         transition-all duration-300 ease-in-out transform origin-bottom-right
-        ${isOpen ? "scale-100 opacity-100 translate-y-0 pointer-events-auto" : "scale-90 opacity-0 translate-y-10 pointer-events-none"}
+        ${isOpen ? "scale-100 opacity-100 pointer-events-auto" : "scale-90 opacity-0 pointer-events-none"}
         w-87.5 md:w-100 h-137.5
         bg-white dark:bg-slate-900 
         rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 
-        overflow-hidden flex flex-col
+        overflow-hidden flex flex-col relative
       `}>
         
-        {/* Header */}
+        {isApiKeyModalOpen && (
+          <div className="absolute inset-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm flex flex-col justify-center items-center p-6 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full transform transition-all animate-in zoom-in-95">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <Key className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h4 className="font-bold text-slate-900 dark:text-white text-lg">Configuration</h4>
+              </div>
+              
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5 leading-relaxed">
+                Enter your own Google Gemini API key to use your personal quota. Leave this blank to use the site's default key.
+              </p>
+              
+              <input 
+                type="password" 
+                value={tempApiKey}
+                onChange={(e) => setTempApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl mb-5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              />
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsApiKeyModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={saveApiKey}
+                  className="flex-1 py-2.5 rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-lg shadow-blue-500/20"
+                >
+                  Save Key
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="bg-linear-to-r from-blue-600 to-indigo-600 p-4 flex justify-between items-center shadow-md">
           <div className="flex items-center gap-3 text-white">
             <div className="p-2 bg-white/20 rounded-full backdrop-blur-sm">
@@ -195,6 +259,13 @@ export default function ChatWidget() {
           </div>
           
           <div className="flex items-center gap-3">
+            <button 
+              onClick={openApiKeyModal} 
+              className={`transition-colors ${customApiKey ? "text-yellow-300 hover:text-yellow-100" : "text-white/70 hover:text-white"}`}
+              title="Set Custom API Key"
+            >
+              <Key className="w-4 h-4" />
+            </button>
             <button onClick={handleClearChat} className="text-white/70 hover:text-white transition-colors" title="Clear Chat">
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -204,11 +275,9 @@ export default function ChatWidget() {
           </div>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-slate-950/50 scrollbar-thin">
           {messages.map((msg, idx) => {
             
-            // Interactive Permission Card
             if (msg.role === "interactive") {
                 return (
                     <div key={idx} className="w-full bg-white dark:bg-slate-800 rounded-xl p-4 text-sm border border-slate-200 dark:border-slate-700 shadow-sm animate-in slide-in-from-bottom-2">
@@ -243,7 +312,6 @@ export default function ChatWidget() {
                 );
             }
 
-            // Standard Chat Bubbles
             return (
                 <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   {msg.role !== "user" && msg.role !== "system" && (
@@ -259,7 +327,6 @@ export default function ChatWidget() {
                       ? "bg-transparent text-slate-400 dark:text-slate-500 text-xs italic w-full text-center py-1 shadow-none"
                       : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm"
                     }`}>
-                    {/* Using ReactMarkdown for formatting */}
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                   </div>
                 </div>
@@ -278,7 +345,6 @@ export default function ChatWidget() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
         <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
           <div className="relative flex items-center">
             <input
@@ -318,10 +384,15 @@ export default function ChatWidget() {
         </div>
       </div>
 
-      {/* Main Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`pointer-events-auto ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'} transition-all duration-300 p-4 bg-linear-to-tr from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-blue-500/30 hover:scale-110 active:scale-95 flex items-center justify-center`}
+        className={`
+          absolute bottom-0 right-0
+          pointer-events-auto 
+          ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'} 
+          transition-all duration-300 
+          w-14 h-14 bg-linear-to-tr from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-blue-500/30 hover:scale-110 active:scale-95 flex items-center justify-center
+        `}
       >
         <MessageCircle className="w-7 h-7" />
       </button>
